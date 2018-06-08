@@ -1,16 +1,16 @@
 -- This file was automatically generated for the LuaDist project.
 
 package = "luazip"
-version = "1.2.6-1"
+version = "1.2.7-1"
 -- LuaDist source
 source = {
-  tag = "1.2.6-1",
+  tag = "1.2.7-1",
   url = "git://github.com/LuaDist-testing/luazip.git"
 }
 -- Original source
 -- source = {
 --    url = "git+https://github.com/mpeterv/luazip",
---    tag = "1.2.6"
+--    tag = "1.2.7"
 -- }
 description = {
    summary = "Library for reading files inside zip files",

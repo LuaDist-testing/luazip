@@ -1,11 +1,11 @@
 /*
  LuaZip - Reading files inside zip files.
- http://www.keplerproject.org/luazip/
+ https://github.com/mpeterv/luazip
 
  Author: Danilo Tuler
+ Maintainer: Peter Melnichenko
  Copyright (c) 2003-2007 Kepler Project
-
- $Id: luazip.c,v 1.11 2007-06-18 18:47:05 carregal Exp $
+ Copyright (c) 2016-2017 Peter Melnichenko
 */
 
 #include <string.h>
@@ -13,9 +13,6 @@
 #include "zzip/zzip.h"
 #include "luazip.h"
 #include "lauxlib.h"
-#if ! defined (LUA_VERSION_NUM) || LUA_VERSION_NUM < 501
-#include "compat-5.1.h"
-#endif
 
 #define ZIPFILEHANDLE    "lzipFile"
 #define ZIPINTERNALFILEHANDLE  "lzipInternalFile"
@@ -24,14 +21,14 @@
 #ifndef luaL_reg
 #define luaL_reg luaL_Reg
 #endif
-#ifndef luaL_getn
-#define luaL_getn luaL_len
-#endif
-#ifndef lua_strlen
-#define lua_strlen luaL_len
-#endif
 #ifndef luaL_optlong
 #define luaL_optlong luaL_optinteger
+#endif
+
+#if LUA_VERSION_NUM == 501
+#define get_length lua_objlen
+#else
+#define get_length lua_rawlen
 #endif
 
 static void set_funcs (lua_State *L, const luaL_Reg *lib) {
@@ -178,7 +175,7 @@ static int zip_openfile (lua_State *L) {
     int i, m, n;
 
     /* how many extension were specified? */
-    n = luaL_getn(L, 2);
+    n = get_length(L, 2);
 
     if (n > LUAZIP_MAX_EXTENSIONS)
     {
@@ -364,7 +361,7 @@ static int read_chars (lua_State *L, ZZIP_FILE *f, size_t n) {
     n -= nr;  /* still have to read `n' chars */
   } while (n > 0 && nr == rlen);  /* until end of count or eof */
   luaL_pushresult(&b);  /* close buffer */
-  return (n == 0 || lua_strlen(L, -1) > 0);
+  return (n == 0 || get_length(L, -1) > 0);
 }
 
 static int g_read (lua_State *L, ZZIP_FILE *f, int first) {
@@ -418,14 +415,14 @@ static int zip_readline (lua_State *L) {
   return read_line(L, f);
 }
 
-static void aux_lines (lua_State *L, int idx, int close) {
+static void aux_lines (lua_State *L, int idx) {
   lua_pushvalue(L, idx);
   lua_pushcclosure(L, zip_readline, 1);
 }
 
 static int ff_lines (lua_State *L) {
   tointernalfile(L, 1);  /* check that it's a valid file handle */
-  aux_lines(L, 1, 0);
+  aux_lines(L, 1);
   return 1;
 }
 
@@ -488,7 +485,7 @@ static void set_info (lua_State *L) {
 	lua_pushliteral (L, "Reading files inside zip files");
 	lua_settable (L, -3);
 	lua_pushliteral (L, "_VERSION");
-	lua_pushliteral (L, "LuaZip 1.2.6");
+	lua_pushliteral (L, "LuaZip 1.2.7");
 	lua_settable (L, -3);
 }
 
