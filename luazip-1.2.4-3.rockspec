@@ -1,10 +1,10 @@
 -- This file was automatically generated for the LuaDist project.
 
 package = "luazip"
-version = "1.2.4-2"
+version = "1.2.4-3"
 -- LuaDist source
 source = {
-  tag = "1.2.4-2",
+  tag = "1.2.4-3",
   url = "git://github.com/LuaDist-testing/luazip.git"
 }
 -- Original source
@@ -47,7 +47,7 @@ build = {
 @@ -21,6 +21,40 @@
  #define ZIPINTERNALFILEHANDLE  "lzipInternalFile"
  #define LUAZIP_MAX_EXTENSIONS 32
- 
+
 +#ifndef luaL_reg
 +#define luaL_reg luaL_Reg
 +#endif
@@ -76,10 +76,12 @@ build = {
 +  lua_pop(L, nup);  /* remove upvalues */
 +}
 +#endif
++#ifndef LUA_COMPAT_OPENLIB
 +static void luaL_openlib(lua_State *L, const char* name, const luaL_Reg* lib, int nup) {
 +  lua_newtable(L); luaL_setfuncs(L, lib, nup);
 +  if (name) { lua_pushvalue(L, -1); lua_setglobal(L, name); }
 +}
++#endif
 +#endif
 +
  static int pushresult (lua_State *L, int i, const char *filename) {
