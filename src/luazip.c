@@ -33,30 +33,14 @@
 #ifndef luaL_optlong
 #define luaL_optlong luaL_optinteger
 #endif
-#if LUA_VERSION_NUM >= 501
-#if LUA_VERSION_NUM == 501
-/* From https://github.com/keplerproject/lua-compat-5.2/blob/v0.3/c-api/compat-5.2.c */
-void luaL_setfuncs (lua_State *L, const luaL_Reg *l, int nup) {
-  luaL_checkstack(L, nup+1, "too many upvalues");
-  for (; l->name != NULL; l++) {  /* fill the table with given functions */
-    int i;
-    lua_pushstring(L, l->name);
-    for (i = 0; i < nup; i++)  /* copy upvalues to the top */
-      lua_pushvalue(L, -(nup + 1));
-    lua_pushcclosure(L, l->func, nup);  /* closure with those upvalues */
-    lua_settable(L, -(nup + 3)); /* table must be below the upvalues, the name and the closure */
+
+static void set_funcs (lua_State *L, const luaL_Reg *lib) {
+  for (; lib->name != NULL; lib++) {
+    lua_pushstring(L, lib->name);
+    lua_pushcfunction(L, lib->func);
+    lua_settable(L, -3);
   }
-  lua_pop(L, nup);  /* remove upvalues */
 }
-#endif
-#ifndef LUA_COMPAT_OPENLIB
-static void luaL_openlib(lua_State *L, const char* name, const luaL_Reg* lib, int nup) {
-  if (name) { lua_newtable(L); lua_insert(L, -(nup + 1)); }
-  luaL_setfuncs(L, lib, nup);
-  if (name) { lua_pushvalue(L, -1); lua_setglobal(L, name); }
-}
-#endif
-#endif
 
 static int pushresult (lua_State *L, int i, const char *filename) {
   if (i) {
@@ -322,74 +306,46 @@ static int ff_gc (lua_State *L) {
   return 0;
 }
 
-static int zzip_getc (ZZIP_FILE *f)
-{
-  char c;
-  return (zzip_fread(&c, sizeof(char), 1, f) == 0) ? EOF : (int)c;
-}
-
-static char* zzip_fgets(char *str, int size, ZZIP_FILE *stream)
-{
-  int c, i;
-
-	for (i = 0; i < size-1; i++)
-	{
-    c = zzip_getc(stream);
-		if (EOF == c)
-			return NULL;
-		str[i]=c;
-		if (('\n' == c)/* || ('\r' == c)*/)
-		{
-      str[i++]='\n';
-			break;
-		}
-	}
-	str[i] = '\0';
-
-	return str;
-}
-
-/* no support to read numbers
-static int zzip_fscanf (ZZIP_FILE *f, const char *format, ...)
-{
-  // TODO
-  return 0;
-}
-
-static int read_number (lua_State *L, ZZIP_FILE *f) {
-  lua_Number d;
-  if (zzip_fscanf(f, LUA_NUMBER_SCAN, &d) == 1) {
-    lua_pushnumber(L, d);
-    return 1;
-  }
-  else return 0;  // read fails
-}
-*/
-
 static int test_eof (lua_State *L, ZZIP_FILE *f) {
-  /* TODO */
-	(void) L;
-	(void) f;
-  return 1;
+  int no_eof;
+
+  if (zzip_file_real(f)) {
+    char c;
+    no_eof = zzip_read(f, &c, 1) != 0;
+
+    if (no_eof) {
+      zzip_seek(f, -1, SEEK_CUR);
+    }
+  } else {
+    ZZIP_STAT z_stat;
+    zzip_file_stat(f, &z_stat);
+    no_eof = zzip_tell(f) != z_stat.st_size;
+  }
+
+  lua_pushliteral(L, "");
+  return no_eof;
 }
 
 static int read_line (lua_State *L, ZZIP_FILE *f) {
   luaL_Buffer b;
+  int read_something = 0;
   luaL_buffinit(L, &b);
+
   for (;;) {
-    size_t l;
-    char *p = luaL_prepbuffer(&b);
-    if (zzip_fgets(p, LUAL_BUFFERSIZE, f) == NULL) {  /* eof? */
-      luaL_pushresult(&b);  /* close buffer */
-      return (lua_strlen(L, -1) > 0);  /* check whether read something */
-    }
-    l = strlen(p);
-    if (p[l-1] != '\n')
-      luaL_addsize(&b, l);
-    else {
-      luaL_addsize(&b, l - 1);  /* do not include `eol' */
-      luaL_pushresult(&b);  /* close buffer */
-      return 1;  /* read at least an `eol' */
+    int i;
+    char *buff = luaL_prepbuffer(&b);
+
+    for (i = 0; i < LUAL_BUFFERSIZE; i++) {
+      int c = '\0';
+
+      if ((zzip_read(f, &c, 1) != 1) || (c == '\n')) {
+        luaL_addsize(&b, i);
+        luaL_pushresult(&b);
+        return read_something || (c == '\n');
+      }
+
+      buff[i] = c;
+      read_something = 1;
     }
   }
 }
@@ -455,35 +411,22 @@ static int ff_read (lua_State *L) {
   return g_read(L, tointernalfile(L, 1), 2);
 }
 
-static int zip_readline (lua_State *L);
+static int zip_readline (lua_State *L) {
+  ZZIP_FILE *f = *(ZZIP_FILE **)lua_touserdata(L, lua_upvalueindex(1));
+  if (f == NULL)  /* file is already closed? */
+    luaL_error(L, "file is already closed");
+  return read_line(L, f);
+}
 
 static void aux_lines (lua_State *L, int idx, int close) {
-  lua_pushliteral(L, ZIPINTERNALFILEHANDLE);
-  lua_rawget(L, LUA_REGISTRYINDEX);
   lua_pushvalue(L, idx);
-  lua_pushboolean(L, close);  /* close/not close file when finished */
-  lua_pushcclosure(L, zip_readline, 3);
+  lua_pushcclosure(L, zip_readline, 1);
 }
 
 static int ff_lines (lua_State *L) {
   tointernalfile(L, 1);  /* check that it's a valid file handle */
   aux_lines(L, 1, 0);
   return 1;
-}
-
-static int zip_readline (lua_State *L) {
-  ZZIP_FILE *f = *(ZZIP_FILE **)lua_touserdata(L, lua_upvalueindex(2));
-  if (f == NULL)  /* file is already closed? */
-    luaL_error(L, "file is already closed");
-  if (read_line(L, f)) return 1;
-  else {  /* EOF */
-    if (lua_toboolean(L, lua_upvalueindex(3))) {  /* generator created file? */
-      lua_settop(L, 0);
-      lua_pushvalue(L, lua_upvalueindex(2));
-      aux_close(L);  /* close it */
-    }
-    return 0;
-  }
 }
 
 static int ff_seek (lua_State *L) {
@@ -510,7 +453,6 @@ static const luaL_reg ziplib[] = {
   {"open", zip_open},
   {"close", zip_close},
   {"type", zip_type},
-//  {"files", io_files},
   {"openfile", zip_openfile},
   {NULL, NULL}
 };
@@ -531,8 +473,6 @@ static const luaL_reg fflib[] = {
   {"lines", ff_lines},
   {"__gc", ff_gc},
   {"__tostring", ff_tostring},
-/*  {"flush", ff_flush},
-  {"write", ff_write},*/
   {NULL, NULL}
 };
 
@@ -548,7 +488,7 @@ static void set_info (lua_State *L) {
 	lua_pushliteral (L, "Reading files inside zip files");
 	lua_settable (L, -3);
 	lua_pushliteral (L, "_VERSION");
-	lua_pushliteral (L, "LuaZip 1.2.5");
+	lua_pushliteral (L, "LuaZip 1.2.6");
 	lua_settable (L, -3);
 }
 
@@ -558,20 +498,22 @@ static void createmeta (lua_State *L) {
   lua_pushliteral(L, "__index");
   lua_pushvalue(L, -2);  /* push metatable */
   lua_rawset(L, -3);  /* metatable.__index = metatable */
-  luaL_openlib(L, NULL, flib, 0);
+  set_funcs(L, flib);
 
   luaL_newmetatable(L, ZIPINTERNALFILEHANDLE); /* create new metatable for internal file handles */
   /* internal file methods */
   lua_pushliteral(L, "__index");
   lua_pushvalue(L, -2);  /* push metatable */
   lua_rawset(L, -3);  /* metatable.__index = metatable */
-  luaL_openlib(L, NULL, fflib, 0);
+  set_funcs(L, fflib);
 }
 
 LUAZIP_API int luaopen_zip (lua_State *L) {
   createmeta(L);
-  lua_pushvalue(L, -1);
-  luaL_openlib(L, LUA_ZIPLIBNAME, ziplib, 1);
+  lua_newtable(L);
+  set_funcs(L, ziplib);
   set_info(L);
+  lua_pushvalue(L, -1);
+  lua_setglobal(L, LUA_ZIPLIBNAME);
   return 1;
 }
