@@ -1,17 +1,9 @@
--- This file was automatically generated for the LuaDist project.
-
-package = "luazip"
-version = "1.2.4-4"
--- LuaDist source
+package = "LuaZip"
+version = "1.2.4-3"
 source = {
-  tag = "1.2.4-4",
-  url = "git://github.com/LuaDist-testing/luazip.git"
+   url = "git://github.com/rjpcomputing/luazip",
+   tag = "v1_2_4"
 }
--- Original source
--- source = {
---    url = "git://github.com/rjpcomputing/luazip",
---    tag = "v1_2_4"
--- }
 description = {
    summary = "Library for reading files inside zip files",
    detailed = [[
