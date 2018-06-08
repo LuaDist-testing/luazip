@@ -1,10 +1,10 @@
 -- This file was automatically generated for the LuaDist project.
 
 package = "luazip"
-version = "1.2.4-3"
+version = "1.2.4-4"
 -- LuaDist source
 source = {
-  tag = "1.2.4-3",
+  tag = "1.2.4-4",
   url = "git://github.com/LuaDist-testing/luazip.git"
 }
 -- Original source
@@ -42,12 +42,12 @@ build = {
    },
    patches = {
 [[
---- luazip/src/luazip.c	2016-07-28 19:34:08.695472558 -0300
-+++ luazip/src/luazip.c	2016-07-28 19:34:13.620472470 -0300
-@@ -21,6 +21,40 @@
+--- luazip/src/luazip.c	2016-09-14 12:26:12.303089553 +0300
++++ luazip/src/luazip.c	2016-09-14 12:22:53.899082530 +0300
+@@ -21,6 +21,42 @@
  #define ZIPINTERNALFILEHANDLE  "lzipInternalFile"
  #define LUAZIP_MAX_EXTENSIONS 32
-
+ 
 +#ifndef luaL_reg
 +#define luaL_reg luaL_Reg
 +#endif
